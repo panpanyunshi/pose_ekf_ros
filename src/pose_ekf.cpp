@@ -100,30 +100,33 @@ Pose_ekf::~Pose_ekf()
 
 void Pose_ekf::predict(Vector3d gyro, Vector3d acc, double t)
 {
+	//todo
+	// return;
+
 	if(!initialized)
 	{
 		initialized = true;
 		this->current_t = t;
 		return;
 	}
-	cout << "line" << __LINE__ << endl;
+	//cout << "line" << __LINE__ << endl;
 	double dt = t - current_t;
 	cout << "dt: " << dt << endl;
 	VectorXd xdot(n_state);
 	MatrixXd F(n_state, n_state);
 	process(gyro, acc, xdot, F);
-	cout << "line" << __LINE__ << endl;
+	//cout << "line" << __LINE__ << endl;
 	x += xdot*dt;
 	F = MatrixXd::Identity(n_state, n_state) + F*dt;//continous F and discrete F
-	cout << "line" << __LINE__ << endl;
+	//cout << "line" << __LINE__ << endl;
 	
 	P = F*P*F.transpose() + Q;//Q and t
 	cout << "F: " << F << endl;
 	
-	cout << "line" << __LINE__ << endl;
+	//cout << "line" << __LINE__ << endl;
 	cout << "P: " << P << endl;
 	x.head(4).normalize();
-	cout << "line" << __LINE__ << endl;
+	//cout << "line" << __LINE__ << endl;
 	this->current_t = t;
 	this->acc = acc;
 	this->gyro = gyro;
@@ -162,18 +165,18 @@ void Pose_ekf::predict(Vector3d gyro, Vector3d acc, double t)
 //xdot = f(x, u);
 void Pose_ekf::process(Vector3d gyro, Vector3d acc, VectorXd& xdot, MatrixXd& F)
 {
-	cout << "line" << __LINE__ << endl;
-	cout << "gyro : " << gyro.transpose() << endl;
-	cout << "acc: " << acc.transpose() << endl;
+	//cout << "line" << __LINE__ << endl;
+	//cout << "gyro : " << gyro.transpose() << endl;
+	//cout << "acc: " << acc.transpose() << endl;
 	Quaterniond q;
 	Vector3d p, v, bw, ba;
 	getState(q, p, v, bw, ba);
-	cout << "line" << __LINE__ << endl;
+	//cout << "line" << __LINE__ << endl;
 	//xdot = VectorXd::Zero(n_state);
 	//F = MatrixXd::Zero(n_state, n_state); 
 	xdot.setZero();
 	F.setZero();
-	cout << "line" << __LINE__ << endl;
+	//cout << "line" << __LINE__ << endl;
 	Quaterniond gyro_q(0, 0, 0, 0);
 	gyro_q.vec() = gyro - bw;
 	Quaterniond q_dot = q*gyro_q;
@@ -181,13 +184,13 @@ void Pose_ekf::process(Vector3d gyro, Vector3d acc, VectorXd& xdot, MatrixXd& F)
 	xdot(0) = q_dot.w();
 	xdot.segment<3>(1) = q_dot.vec();
 	xdot.segment<3>(4) = v;
-	cout << "line" << __LINE__ << endl;
+	//cout << "line" << __LINE__ << endl;
 	Vector3d g = Vector3d(0, 0, 9.8);
 	Quaterniond acc_b_q(0, 0, 0, 0);
 	acc_b_q.vec() = acc - ba;
 	Quaterniond acc_n_q =  q*acc_b_q*q.inverse();
 	xdot.segment<3>(7) = acc_n_q.vec() - g;//body frame to n frame 
-	cout << "line" << __LINE__ << endl;
+	//cout << "line" << __LINE__ << endl;
 	F.block<4, 4>(0, 0) = 0.5*diff_pq_p(gyro_q);
 	F.block<4, 3>(0, 10) = -0.5*(diff_pq_q(q).block<4, 3>(0, 1));
 
@@ -195,9 +198,9 @@ void Pose_ekf::process(Vector3d gyro, Vector3d acc, VectorXd& xdot, MatrixXd& F)
 	
 	F.block<3, 4>(7, 0) = diff_qvqstar_q(q, acc_b_q.vec());
 	F.block<3, 3>(7, 13) = -diff_qvqstar_v(q);
-	cout << "line" << __LINE__ << endl;
-	cout << "xdot:" << xdot.transpose() << endl;
-	cout << "F: " << F << endl;
+	//cout << "line" << __LINE__ << endl;
+	//cout << "xdot:" << xdot.transpose() << endl;
+	//cout << "F: " << F << endl;
 }
 
 
@@ -263,14 +266,14 @@ void Pose_ekf::correct(VectorXd z, VectorXd zhat, MatrixXd H, MatrixXd R)
     cout << "P: " << P << endl;
    	MatrixXd K = P*H.transpose()*(H*P*H.transpose() + R).inverse();
    	cout << "K: " << K << endl;
-   	cout << "line" << __LINE__ << endl;
+   	//cout << "line" << __LINE__ << endl;
     x += K*(z - zhat);
-    cout << "line" << __LINE__ << endl;
+    //cout << "line" << __LINE__ << endl;
     MatrixXd I = MatrixXd::Identity(n_state, n_state);
     P = (I - K*H)*P;
     x.head(4).normalize();
 
-    cout << "line" << __LINE__ << endl;
+    //cout << "line" << __LINE__ << endl;
 
     Quaterniond q;
 	Vector3d p, v, bw, ba;
@@ -284,11 +287,16 @@ void Pose_ekf::correct(VectorXd z, VectorXd zhat, MatrixXd H, MatrixXd R)
 }
 void Pose_ekf::correct_fix(Vector3d position, double t)
 {
+	
+	//test
+	// x.segment<2>(4) = position.head(2);
+	// return;
+
+
 	if(t < current_t) return;
 	//predict to current step
 	predict(this->gyro, this->acc, t);
 	double dt = t - current_t;
-
 	if(!initialized)
 	{
 		initialized = true;
@@ -303,6 +311,10 @@ void Pose_ekf::correct_fix(Vector3d position, double t)
 }
 void Pose_ekf::correct_fix_velocity(Vector3d velocity, double t)
 {
+	// cout << "velocity: " << velocity << endl;
+	// x.segment<3>(7) = velocity;
+	// return;
+
 	if(t < current_t) return;
 	//predict to current step
 	predict(this->gyro, this->acc, t);
@@ -322,6 +334,9 @@ void Pose_ekf::correct_fix_velocity(Vector3d velocity, double t)
 }
 void Pose_ekf::correct_sonar_height(double sonar_height, double t)
 {
+	// x(6) = sonar_height;
+	// return;
+
 	if(t < current_t) return;
 	//predict to current step
 	predict(this->gyro, this->acc, t);

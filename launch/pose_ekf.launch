@@ -7,5 +7,6 @@
     <remap from="~fix_velocity" to="/fix_velocity"/>
     <remap from="~magnetic_field" to="/magnetic_field"/>
   </node>
-
+  <node pkg="rviz" type="rviz" name="rviz" args="-d $(find hector_quadrotor_demo)/rviz_cfg/pose_ekf.rviz"/>
+  
 </launch>
