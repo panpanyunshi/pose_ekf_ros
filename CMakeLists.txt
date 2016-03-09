@@ -8,6 +8,7 @@ set(CMAKE_CXX_FLAGS "-DNDEBUG -std=c++11 -march=native -Ofast -Wall -fopenmp")
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
 find_package(Eigen3 REQUIRED)
+find_package(GeographicLib 1.35 REQUIRED)
 
 find_package(catkin REQUIRED
   message_generation
@@ -20,8 +21,10 @@ find_package(catkin REQUIRED
 )
 include_directories(
 ${EIGEN3_INCLUDE_DIR}
+${GeographicLib_INCLUDE_DIRS}
 ) 
 
+add_definitions(${GeographicLib_DEFINITIONS})
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
 
@@ -123,6 +126,7 @@ add_executable(pose_ekf src/pose_ekf_node.cpp src/pose_ekf.cpp src/conversion.cp
 target_link_libraries(pose_ekf
 		${catkin_LIBRARIES}
 		${EIGEN_LIBRARIES}
+    ${GeographicLib_LIBRARIES}
 		)
 
 ###########

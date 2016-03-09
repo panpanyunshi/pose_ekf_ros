@@ -22,6 +22,12 @@
 #include "pose_ekf.h"
 #include <algorithm>
 
+#include <GeographicLib/Geoid.hpp>
+#include <GeographicLib/MagneticModel.hpp>
+#include <GeographicLib/LocalCartesian.hpp>
+
+std::shared_ptr<GeographicLib::Geoid> geoid;
+
 using namespace std;
 using namespace Eigen;
 
@@ -37,65 +43,143 @@ enum SensorType
 
 
 Pose_ekf pose_ekf;
+ros::Publisher pose_pub;
 
-ros::Publisher pub_path;
-ros::Publisher pub_pose;
 nav_msgs::Path path_msg;
+ros::Publisher pub_path;
 
 deque< pair<double, sensor_msgs::Imu> > imu_q;
 deque< pair<double, geometry_msgs::Vector3Stamped> > mag_q;
 deque< pair<double, hector_uav_msgs::Altimeter> >altimeter_q;
 deque< pair<double, sensor_msgs::Range> >sonar_height_q;
-deque< pair<double, sensor_msgs::NavSatFix> >fix_q;
+deque< pair<double, Vector3d> >fix_q;
 deque< pair<double, geometry_msgs::Vector3Stamped> >fix_velocity_q;
 
+void publish_pose(Pose_ekf pose_ekf)
+{
+  geometry_msgs::PoseStamped pose;
+  Quaterniond q;
+  Vector3d p, v, bw, ba;
+  pose_ekf.getState(q, p, v, bw, ba);
+  pose.header.stamp = ros::Time(pose_ekf.get_time());
+  pose.header.frame_id = "/world";
+  pose.pose.orientation.w = q.w();
+  pose.pose.orientation.x = q.x();
+  pose.pose.orientation.y = q.y();
+  pose.pose.orientation.z = q.z();
+  pose.pose.position.x = p(0);
+  pose.pose.position.y = p(1);
+  pose.pose.position.z = p(2);
+
+  pose_pub.publish(pose);
+}
 
 
-//
+bool loadModels() 
+{
+  cout << "line" << __LINE__ << endl;
+  if (!geoid) {
+    try {
+      geoid = std::make_shared<GeographicLib::Geoid>("egm84-15", "/home/libing/catkin_ws/src/pose_ekf/src/geoids");
+    }
+    catch (GeographicLib::GeographicErr &e) {
+      ROS_ERROR("Failed to load geoid. Reason: %s", e.what());
+      return false;
+    }
+  }
+  cout << "line" << __LINE__ << endl;
+  return true;
+}
+
+
 bool processSensorData()
 {
   
   if(imu_q.empty() || (imu_q.back().first - imu_q.front().first) < 0.15 ) return false;
 
+  cout << "line" << __LINE__ << endl;
   //find the first com sensor
   double t[6] = {DBL_MAX};
+  for(int i = 0; i < 6; i++) t[i] = DBL_MAX;
   if(!imu_q.empty()) t[0] = imu_q.front().first;
   if(!mag_q.empty()) t[1] = mag_q.front().first;
   if(!altimeter_q.empty()) t[2] = altimeter_q.front().first;
   if(!sonar_height_q.empty()) t[3] = sonar_height_q.front().first;
   if(!fix_q.empty()) t[4] = fix_q.front().first;
   if(!fix_velocity_q.empty()) t[5] = fix_velocity_q.front().first;
-
+  cout << "line" << __LINE__ << endl;
+  for(int i = 0; i < 6; i++) cout << i << " " << t[i] << "  ";
   int min_id = min_element(t, t + 6) - t;
+  cout << "min_id: " << min_id << "  min_t: " << t[min_id] << endl;
   if(t[min_id] == DBL_MAX) return false;
 
-  switch (min_id)
+  cout << "line" << __LINE__ << endl;
+  if(min_id == 0)//imu
   {
-    case 0:
+        cout << "line" << __LINE__ << endl;
+        cout << "size: " << imu_q.size() << endl;
+        double t = imu_q.front().first;
+        sensor_msgs::Imu msg = imu_q.front().second;
+        Vector3d acc, gyro;
+        acc(0) = msg.linear_acceleration.x;
+        acc(1) = msg.linear_acceleration.y;
+        acc(2) = msg.linear_acceleration.z;
+        gyro(0) = msg.angular_velocity.x;
+        gyro(1) = msg.angular_velocity.y;
+        gyro(2) = msg.angular_velocity.z;
+        pose_ekf.predict(gyro, acc, t);
+        imu_q.pop_front();
+        cout << "line" << __LINE__ << endl;
+    } else if(min_id == 1)//magnetic 
+    {
+      // double t = mag_q.front().first;
+      // geometry_msgs::Vector3Stamped msg = mag_q.front().second;
+      // Vector3d mag;
+      // mag(0) = msg.vector.x;
+      // mag(1) = msg.vector.y;
+      // mag(2) = msg.vector.z;
 
-      break;
-    case 1:
+    } else if(min_id == 2)//altimeter
+    {
 
-      break;
-    case 2:
+    }else if(min_id == 3) //sonar height
+    {
+      cout << "line" << __LINE__ << endl;
+      double t = sonar_height_q.front().first;
+      sensor_msgs::Range msg = sonar_height_q.front().second;
+      double sonar_height = msg.range;
+      pose_ekf.correct_sonar_height(sonar_height, t);
+      sonar_height_q.pop_front();
+      cout << "line" << __LINE__ << endl;
+    }else if(min_id == 4)//fix
+    {
+      cout << "line" << __LINE__ << endl;
+      double t = fix_q.front().first;
+      Vector3d position = fix_q.front().second;
+      pose_ekf.correct_fix(position, t);
+      fix_q.pop_front();
+      cout << "line" << __LINE__ << endl;
+    }else if(min_id == 5) //fix_velocity
+    {
+      cout << "line" << __LINE__ << endl;
+      double t = fix_velocity_q.front().first;
+      geometry_msgs::Vector3Stamped msg = fix_velocity_q.front().second;
+      Vector3d fix_velocity;
+      fix_velocity(0) = msg.vector.x;
+      fix_velocity(1) = msg.vector.y;
+      fix_velocity(2) = msg.vector.z;
+      pose_ekf.correct_fix_velocity(fix_velocity, t);
+      fix_velocity_q.pop_front();
+      cout << "line" << __LINE__ << endl;
+    }
 
-      break;  
-    case 3:
-
-      break;
-    case 4:
-
-      break;
-    case 5:
-    
-      break;  
-  }
+ 
   return true;
 }
 
 void imuCallback(const sensor_msgs::ImuConstPtr& imu_msg)
 {
-    ROS_INFO("imu");
+    cout << "imu; ";
     Vector3d gyro, acc;
     acc(0) = imu_msg->linear_acceleration.x;
     acc(1) = imu_msg->linear_acceleration.y;
@@ -117,13 +201,15 @@ void magCallback(const geometry_msgs::Vector3StampedConstPtr &msg)
   mag(1) = msg->vector.y;
   mag(2) = msg->vector.z;
   double t = msg->header.stamp.toSec();
-  mag_q.push_back(make_pair(t, *msg));
+  //mag_q.push_back(make_pair(t, *msg));
+  cout << "mag; ";
 }
 
 void altimeterCallback(const hector_uav_msgs::AltimeterConstPtr& msg)
 {
   double t = msg->header.stamp.toSec();
-  altimeter_q.push_back(make_pair(t, *msg));
+  //altimeter_q.push_back(make_pair(t, *msg));
+  cout << "altimeter; ";
 }
 
 void sonarCallback(const sensor_msgs::RangeConstPtr &msg)
@@ -131,18 +217,43 @@ void sonarCallback(const sensor_msgs::RangeConstPtr &msg)
   double depth  = msg->range / ((msg->range > 100.0) ? 100.0 :1.0);
   double t = msg->header.stamp.toSec();
   sonar_height_q.push_back(make_pair(t, *msg));
+  cout << "sonar; ";
 }
 
 void fixCallback(const sensor_msgs::NavSatFixConstPtr & msg)
 {
+  static GeographicLib::LocalCartesian refPoint;
+  static bool refInitialized = false;
+  cout << "fix; "; 
   double t = msg->header.stamp.toSec();
-  fix_q.push_back(make_pair(t, *msg));
+  cout << "lat: " << msg->latitude << "  lon" << msg->longitude << endl;
+  if(! loadModels())
+  {
+    return;
+  }
+  //convert to height above sea level, input is degree
+  double hMSL = geoid->ConvertHeight(msg->altitude, msg->longitude, msg->altitude, GeographicLib::Geoid::ELLIPSOIDTOGEOID);
+  if(!refInitialized)
+  {
+    refPoint = GeographicLib::LocalCartesian(msg->latitude, msg->longitude, msg->altitude);
+    refInitialized = true;
+  }
+  double locX, locY, locZ;
+  refPoint.Forward(msg->latitude, msg->longitude, msg->altitude, locX, locY, locZ);
+  Vector3d position;
+  position(0) = locX;
+  position(1) = locY;
+  position(2) = locZ;
+  fix_q.push_back(make_pair(t, position));
+
 }
 
 void fixVelocityCallback(const geometry_msgs::Vector3StampedConstPtr& msg)
 {
     double t = msg->header.stamp.toSec();
     fix_velocity_q.push_back(make_pair(t, *msg));
+    cout << "fix_velocity; ";
+
 }
 
 int main (int argc, char **argv) 
@@ -152,16 +263,20 @@ int main (int argc, char **argv)
   ros::NodeHandle n("~");
 
   pub_path = n.advertise<nav_msgs::Path>("path", 10);
-  pub_pose = n.advertise<geometry_msgs::PoseStamped>("pose", 10);
+  pose_pub = n.advertise<geometry_msgs::PoseStamped>("/est_pose", 10);
 
   path_msg.header.frame_id = "world";
-
+  cout << "line" << __LINE__ << endl;
   ros::Subscriber sub_imu = n.subscribe("imu", 100, imuCallback);
   ros::Subscriber sub_mag = n.subscribe("magnetic_field", 100, magCallback);
   ros::Subscriber sub_fix = n.subscribe("fix", 100, fixCallback);
-  ros::Subscriber sub_sonar = n.subscribe("sonar", 100, sonarCallback); 
+  ros::Subscriber sub_sonar = n.subscribe("sonar_height", 100, sonarCallback); 
   ros::Subscriber sub_fix_velocity = n.subscribe("fix_velocity", 100, fixVelocityCallback);
   ros::Subscriber sub_altimeter = n.subscribe("altimeter", 100, altimeterCallback);
+  cout << "line" << __LINE__ << endl;
+
+  bool ret = loadModels();
+  if(!ret) return -1;
 
   ros::Rate loop_rate(50);
   while(ros::ok())
@@ -169,8 +284,10 @@ int main (int argc, char **argv)
     ros::spinOnce();
 
     while(processSensorData()){}
+    publish_pose(pose_ekf);
+
     loop_rate.sleep();
   }
-  ros::spin();
+  return 0;
 }
 

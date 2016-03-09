@@ -84,28 +84,17 @@ Matrix3d diff_qvqstar_v(Quaterniond q)
 	return D; 
 }
 
-Pose_ekf::Pose_ekf() : position_cov(0.5), height_cov(2.0), velocity_cov(2.5), gyro_cov(0.0001), acc_cov(0.01), mag_cov(0.1)
+Pose_ekf::Pose_ekf()
 {	
 	initialized = false;
-	x = VectorXd::Zero(16);
+	x = VectorXd::Zero(n_state);
 	x.head(4) << 1, 0, 0, 0;
-	P = MatrixXd::Zero(16, 16);
-	for (int i = 0; i < 16; ++i)
-	{
-		P(i, i) = 100.0;
-	}
-
-	Q = MatrixXd::Identity(16, 16)*0.1;
-	R = MatrixXd::Identity(9, 9);
-	R.block<3, 3>(0, 0) = Matrix3d::Identity()*mag_cov;
-	R.block<3, 3>(3, 3) = Matrix3d::Identity()*position_cov;
-	R(5, 5) = height_cov;
-	R.block<3, 3>(6, 6) = Matrix3d::Identity()*velocity_cov;
+	P = MatrixXd::Identity(n_state, n_state);
 }
+
 Pose_ekf::~Pose_ekf()
 {
 	
-
 }
 
 
@@ -117,18 +106,24 @@ void Pose_ekf::predict(Vector3d gyro, Vector3d acc, double t)
 		this->current_t = t;
 		return;
 	}
-
+	cout << "line" << __LINE__ << endl;
 	double dt = t - current_t;
-	VectorXd xdot;
-	MatrixXd F;
+	cout << "dt: " << dt << endl;
+	VectorXd xdot(n_state);
+	MatrixXd F(n_state, n_state);
 	process(gyro, acc, xdot, F);
-
+	cout << "line" << __LINE__ << endl;
 	x += xdot*dt;
 	F = MatrixXd::Identity(n_state, n_state) + F*dt;//continous F and discrete F
+	cout << "line" << __LINE__ << endl;
 	
 	P = F*P*F.transpose() + Q;//Q and t
+	cout << "F: " << F << endl;
+	
+	cout << "line" << __LINE__ << endl;
+	cout << "P: " << P << endl;
 	x.head(4).normalize();
-
+	cout << "line" << __LINE__ << endl;
 	this->current_t = t;
 	this->acc = acc;
 	this->gyro = gyro;
@@ -165,38 +160,44 @@ void Pose_ekf::predict(Vector3d gyro, Vector3d acc, double t)
 // }
 
 //xdot = f(x, u);
-VectorXd Pose_ekf::process(Vector3d gyro, Vector3d acc, VectorXd& xdot, MatrixXd& F)
+void Pose_ekf::process(Vector3d gyro, Vector3d acc, VectorXd& xdot, MatrixXd& F)
 {
+	cout << "line" << __LINE__ << endl;
+	cout << "gyro : " << gyro.transpose() << endl;
+	cout << "acc: " << acc.transpose() << endl;
 	Quaterniond q;
-	q.w() = x(0); q.vec() = x.segment<3>(1);
-	Vector3d p = x.segment<3>(4);
-	Vector3d v = x.segment<3>(7);
-	Vector3d bw = x.segment<3>(10);
-	Vector3d ba = x.segment<3>(13);
-	xdot = VectorXd::Zero(16);
-	F = MatrixXd::Zero(n_state, n_state); 
-
-	Quaterniond gyro_q;
+	Vector3d p, v, bw, ba;
+	getState(q, p, v, bw, ba);
+	cout << "line" << __LINE__ << endl;
+	//xdot = VectorXd::Zero(n_state);
+	//F = MatrixXd::Zero(n_state, n_state); 
+	xdot.setZero();
+	F.setZero();
+	cout << "line" << __LINE__ << endl;
+	Quaterniond gyro_q(0, 0, 0, 0);
 	gyro_q.vec() = gyro - bw;
 	Quaterniond q_dot = q*gyro_q;
 	q_dot.w() /= 2; q_dot.vec() /= 2;//* and / to scalar is not support for Quaternion
 	xdot(0) = q_dot.w();
 	xdot.segment<3>(1) = q_dot.vec();
 	xdot.segment<3>(4) = v;
-
-	Matrix3d Rnb = quaternion2mat(q);
+	cout << "line" << __LINE__ << endl;
 	Vector3d g = Vector3d(0, 0, 9.8);
-	xdot.segment<3>(7) = Rnb*(acc - ba) + g;
-	xdot.segment<3>(10) = Vector3d::Zero();
-	xdot.segment<3>(13) = Vector3d::Zero();
-
+	Quaterniond acc_b_q(0, 0, 0, 0);
+	acc_b_q.vec() = acc - ba;
+	Quaterniond acc_n_q =  q*acc_b_q*q.inverse();
+	xdot.segment<3>(7) = acc_n_q.vec() - g;//body frame to n frame 
+	cout << "line" << __LINE__ << endl;
 	F.block<4, 4>(0, 0) = 0.5*diff_pq_p(gyro_q);
-	F.block<4, 3>(0, 4) = -0.5*(diff_pq_q(q).block<4, 3>(0, 1));
+	F.block<4, 3>(0, 10) = -0.5*(diff_pq_q(q).block<4, 3>(0, 1));
 
 	F.block<3, 3>(4, 7) = Matrix3d::Identity();
 	
-	F.block<3, 1>(4, 0) = -diff_qvqstar_q(q, ba);
-	F.block<3, 3>(4, 1) = -diff_qvqstar_v(q);
+	F.block<3, 4>(7, 0) = diff_qvqstar_q(q, acc_b_q.vec());
+	F.block<3, 3>(7, 13) = -diff_qvqstar_v(q);
+	cout << "line" << __LINE__ << endl;
+	cout << "xdot:" << xdot.transpose() << endl;
+	cout << "F: " << F << endl;
 }
 
 
@@ -257,12 +258,29 @@ void Pose_ekf::correct(VectorXd z, VectorXd zhat, MatrixXd H, MatrixXd R)
     cout << "z: " << z.transpose() << endl;
     cout << "zhat: " << zhat.transpose() << endl;
     cout << "dz: " << (z - zhat).transpose() << endl;
-
+    cout << "H: " << H << endl;
+    cout << "R: " << R << endl;
+    cout << "P: " << P << endl;
    	MatrixXd K = P*H.transpose()*(H*P*H.transpose() + R).inverse();
+   	cout << "K: " << K << endl;
+   	cout << "line" << __LINE__ << endl;
     x += K*(z - zhat);
-    MatrixXd I = MatrixXd::Zero(16, 16);
+    cout << "line" << __LINE__ << endl;
+    MatrixXd I = MatrixXd::Identity(n_state, n_state);
     P = (I - K*H)*P;
     x.head(4).normalize();
+
+    cout << "line" << __LINE__ << endl;
+
+    Quaterniond q;
+	Vector3d p, v, bw, ba;
+	getState(q, p, v, bw, ba);
+	cout << "q: " << q.w()  << " " << q.vec().transpose() << endl;
+	cout << "p: " << p.transpose() << endl;
+	cout << "v: " << v.transpose() << endl;
+	cout << "bw: " << bw.transpose() << endl;
+	cout << "ba: " << ba.transpose() << endl;
+	
 }
 void Pose_ekf::correct_fix(Vector3d position, double t)
 {

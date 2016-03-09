@@ -1,0 +1,11 @@
+<launch>
+
+  <node name="pose_ekf" pkg="pose_ekf" type="pose_ekf" output="screen">
+    <remap from="~imu" to="/raw_imu"/>
+    <remap from="~sonar_height" to="/sonar_height"/>
+    <remap from="~fix" to="/fix"/>
+    <remap from="~fix_velocity" to="/fix_velocity"/>
+    <remap from="~magnetic_field" to="/magnetic_field"/>
+  </node>
+
+</launch>

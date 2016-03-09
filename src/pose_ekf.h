@@ -20,7 +20,7 @@ public:
 	~Pose_ekf();	
 	void predict(Vector3d gyro, Vector3d acc, double t);
 	void correct(Vector3d pos, Vector3d vel, Vector3d mag, double t);
-	VectorXd process(Vector3d gyro, Vector3d acc, VectorXd& xdot, MatrixXd& F);
+	void process(Vector3d gyro, Vector3d acc, VectorXd& xdot, MatrixXd& F);
 	MatrixXd computeF(Vector3d gyro, Vector3d acc);
 	
 	VectorXd measurement(VectorXd x, Vector3d mag);
@@ -38,25 +38,24 @@ public:
 
 	// void measurement_altimeter(double& altimeter_height, MatrixXd H);
 	void getState(Quaterniond& q, Vector3d& position, Vector3d& velocity, Vector3d & bw, Vector3d&  ba);
-
+	double get_time() { return current_t;}
 private:
 	VectorXd x;//state 
 	MatrixXd P;//covariance
 
 	//covariance parameter
-	double position_cov;
-	double height_cov;
-	double velocity_cov;
-	double gyro_cov;
-	double acc_cov;
-	double mag_cov;
+	const double fix_cov = 2.0;
+	const double sonar_height_cov = 0.2;
+	const double fix_velocity_cov = 2.0;
+	const double gyro_cov = 1e-2;
+	const double acc_cov = 1e-1;
+	const double mag_cov = 2.0;
 
-	MatrixXd R; //measurement noise
-	MatrixXd Q; //process noise
-
-	MatrixXd R_fix;
-	MatrixXd R_fix_velocity;
-	MatrixXd R_sonar_height;
+	const int n_state = 16;
+	const MatrixXd Q = MatrixXd::Identity(n_state, n_state)*0.01; //process noise
+	const MatrixXd R_fix = Matrix2d::Identity()*fix_cov;
+	const MatrixXd R_fix_velocity = Matrix3d::Identity()*fix_velocity_cov;
+	const MatrixXd R_sonar_height = MatrixXd::Identity(1, 1)*sonar_height_cov;
 
 	Vector3d acc;
 	Vector3d gyro;
@@ -69,7 +68,7 @@ private:
 	bool altimeter_initialized;
 	bool sonar_initialized;
 
-	const int n_state = 16;
+	
 };
 
 #endif 
