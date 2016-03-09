@@ -132,13 +132,14 @@ bool processSensorData()
         //cout << "line" << __LINE__ << endl;
     } else if(min_id == 1)//magnetic 
     {
-      // double t = mag_q.front().first;
-      // geometry_msgs::Vector3Stamped msg = mag_q.front().second;
-      // Vector3d mag;
-      // mag(0) = msg.vector.x;
-      // mag(1) = msg.vector.y;
-      // mag(2) = msg.vector.z;
-
+      double t = mag_q.front().first;
+      geometry_msgs::Vector3Stamped msg = mag_q.front().second;
+      Vector3d mag;
+      mag(0) = msg.vector.x;
+      mag(1) = msg.vector.y;
+      mag(2) = msg.vector.z;
+      pose_ekf.correct_magnetic_field(mag, t);
+      mag_q.pop_front();
     } else if(min_id == 2)//altimeter
     {
 
@@ -200,8 +201,8 @@ void magCallback(const geometry_msgs::Vector3StampedConstPtr &msg)
   mag(1) = msg->vector.y;
   mag(2) = msg->vector.z;
   double t = msg->header.stamp.toSec();
-  //mag_q.push_back(make_pair(t, *msg));
-  cout << "mag; ";
+  mag_q.push_back(make_pair(t, *msg));
+  //cout << "mag: " << mag.transpose() << endl;
 }
 
 void altimeterCallback(const hector_uav_msgs::AltimeterConstPtr& msg)

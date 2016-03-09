@@ -5,7 +5,7 @@
 using namespace std;
 using namespace Eigen;
 
-#define eps 1e-6
+
 //quaternion: body fram to navigation frame
 //Rnb
 //ekf state 
@@ -90,6 +90,13 @@ Pose_ekf::Pose_ekf()
 	x = VectorXd::Zero(n_state);
 	x.head(4) << 1, 0, 0, 0;
 	P = MatrixXd::Identity(n_state, n_state);
+
+	initialized = false;
+	fix_initialized = false;
+	imu_initialized = false;
+	altimeter_initialized = false;
+	sonar_initialized = false;
+	magnetic_initialized = false;
 }
 
 Pose_ekf::~Pose_ekf()
@@ -100,8 +107,17 @@ Pose_ekf::~Pose_ekf()
 
 void Pose_ekf::predict(Vector3d gyro, Vector3d acc, double t)
 {
-	//todo
-	// return;
+	if(!imu_initialized)
+	{
+		imu_initialized = true;
+		this->current_t = t;
+		double phy = atan2(acc(1), acc(2));
+		double theta = atan2(-acc(0), acc(2));
+		Vector3d rpy(phy, theta, 0);
+		Quaterniond q = euler2quaternion(rpy);
+		x(0) = q.w(); x.segment<3>(1) = q.vec();
+		return;
+	}
 
 	if(!initialized)
 	{
@@ -121,10 +137,10 @@ void Pose_ekf::predict(Vector3d gyro, Vector3d acc, double t)
 	//cout << "line" << __LINE__ << endl;
 	
 	P = F*P*F.transpose() + Q;//Q and t
-	cout << "F: " << F << endl;
+	//cout << "F: " << F << endl;
 	
 	//cout << "line" << __LINE__ << endl;
-	cout << "P: " << P << endl;
+	//cout << "P: " << P << endl;
 	x.head(4).normalize();
 	//cout << "line" << __LINE__ << endl;
 	this->current_t = t;
@@ -203,26 +219,6 @@ void Pose_ekf::process(Vector3d gyro, Vector3d acc, VectorXd& xdot, MatrixXd& F)
 	//cout << "F: " << F << endl;
 }
 
-
-// MatrixXd Pose_ekf::computeF(Vector3d gyro, Vector3d acc)
-// {
-// 	VectorXd delta[16];
-// 	for (int i = 0; i < 16; ++i)
-// 	{
-// 		delta[i] = VectorXd::Zero(16);
-// 		delta[i](i) = eps;
-// 	}
-
-// 	MatrixXd F = MatrixXd::Zero(16, 16);
-// 	for (int i = 0; i < 16; ++i)
-// 	{
-// 		VectorXd temp = process(x + delta[i], gyro, acc) - process(x - delta[i], gyro, acc);
-// 		F.col(i) = temp/(2*eps);
-// 	}
-// 	return F;
-// }
-
-
 void Pose_ekf::getState(Quaterniond& q, Vector3d& p, Vector3d& v, Vector3d & bw, Vector3d& ba)
 {
 	q.w() = x(0);
@@ -255,17 +251,30 @@ void Pose_ekf::measurement_sonar_height(VectorXd& sonar_height, MatrixXd& H)
 	H(0, 6) = 1;
 }
 
+void Pose_ekf::measurement_magnetic_field(Vector3d& magnetic_field, MatrixXd& H)
+{
+	Quaterniond q;
+	q.w() = x(0); q.vec() = x.segment<3>(1);
+	Quaterniond ref_mag_q;
+	ref_mag_q.w() = 0; ref_mag_q.vec() = referenceMagneticField_;
+	cout << "ref_mag:" << referenceMagneticField_.transpose() << endl;
+	cout << "q: " << q.w()  << " " << q.vec().transpose() << endl;
+	Quaterniond magnetic_field_q =  q*ref_mag_q*q.inverse();
+	//cout << "magnetic_field_q: " << magnetic_field_q.w()  << " " << magnetic_field_q.vec().transpose() << endl;
+	magnetic_field = magnetic_field_q.vec();
+
+	H = MatrixXd::Zero(3, n_state);
+	H.block<3, 4>(0, 0) = diff_qvqstar_q(q, referenceMagneticField_);
+	cout << "magnetic_field: " << magnetic_field.transpose() << endl;
+}
+
 
 void Pose_ekf::correct(VectorXd z, VectorXd zhat, MatrixXd H, MatrixXd R)
 {
-    cout << "z: " << z.transpose() << endl;
-    cout << "zhat: " << zhat.transpose() << endl;
-    cout << "dz: " << (z - zhat).transpose() << endl;
-    cout << "H: " << H << endl;
-    cout << "R: " << R << endl;
-    cout << "P: " << P << endl;
+    // cout << "z: " << z.transpose() << endl;
+    // cout << "zhat: " << zhat.transpose() << endl;
+    // cout << "dz: " << (z - zhat).transpose() << endl;
    	MatrixXd K = P*H.transpose()*(H*P*H.transpose() + R).inverse();
-   	cout << "K: " << K << endl;
    	//cout << "line" << __LINE__ << endl;
     x += K*(z - zhat);
     //cout << "line" << __LINE__ << endl;
@@ -278,31 +287,26 @@ void Pose_ekf::correct(VectorXd z, VectorXd zhat, MatrixXd H, MatrixXd R)
     Quaterniond q;
 	Vector3d p, v, bw, ba;
 	getState(q, p, v, bw, ba);
-	cout << "q: " << q.w()  << " " << q.vec().transpose() << endl;
-	cout << "p: " << p.transpose() << endl;
-	cout << "v: " << v.transpose() << endl;
-	cout << "bw: " << bw.transpose() << endl;
-	cout << "ba: " << ba.transpose() << endl;
+	// cout << "q: " << q.w()  << " " << q.vec().transpose() << endl;
+	// cout << "p: " << p.transpose() << endl;
+	// cout << "v: " << v.transpose() << endl;
+	// cout << "bw: " << bw.transpose() << endl;
+	// cout << "ba: " << ba.transpose() << endl;
 	
 }
 void Pose_ekf::correct_fix(Vector3d position, double t)
 {
-	
-	//test
-	// x.segment<2>(4) = position.head(2);
-	// return;
-
-
-	if(t < current_t) return;
-	//predict to current step
-	predict(this->gyro, this->acc, t);
-	double dt = t - current_t;
 	if(!initialized)
 	{
 		initialized = true;
 		this->current_t = t;
 		return;
 	}
+
+	if(t < current_t) return;
+	//predict to current step
+	predict(this->gyro, this->acc, t);
+	double dt = t - current_t;
 	Vector2d z = position.head(2);
 	Vector2d zhat;
 	MatrixXd H;
@@ -311,21 +315,17 @@ void Pose_ekf::correct_fix(Vector3d position, double t)
 }
 void Pose_ekf::correct_fix_velocity(Vector3d velocity, double t)
 {
-	// cout << "velocity: " << velocity << endl;
-	// x.segment<3>(7) = velocity;
-	// return;
-
-	if(t < current_t) return;
-	//predict to current step
-	predict(this->gyro, this->acc, t);
-	double dt = t - current_t;
-
 	if(!initialized)
 	{
 		initialized = true;
 		this->current_t = t;
 		return;
 	}
+
+	if(t < current_t) return;
+	//predict to current step
+	predict(this->gyro, this->acc, t);
+	
 	Vector3d z = velocity;
 	Vector3d zhat;
 	MatrixXd H;
@@ -334,13 +334,6 @@ void Pose_ekf::correct_fix_velocity(Vector3d velocity, double t)
 }
 void Pose_ekf::correct_sonar_height(double sonar_height, double t)
 {
-	// x(6) = sonar_height;
-	// return;
-
-	if(t < current_t) return;
-	//predict to current step
-	predict(this->gyro, this->acc, t);
-	double dt = t - current_t;
 	if(!initialized)
 	{
 		initialized = true;
@@ -348,10 +341,37 @@ void Pose_ekf::correct_sonar_height(double sonar_height, double t)
 		return;
 	}
 
+	if(t < current_t) return;
+	//predict to current step
+	predict(this->gyro, this->acc, t);
+
 	VectorXd z(1);
 	z(0) = sonar_height;
 	VectorXd zhat(1);
 	MatrixXd H;
-	//measurement_sonar_height(zhat, H);
-	//correct(z, zhat, H, R_fix_velocity);
+
+	measurement_sonar_height(zhat, H);
+	correct(z, zhat, H, R_sonar_height);
+}
+
+void Pose_ekf::correct_magnetic_field(Vector3d mag, double t)
+{
+	if(!magnetic_initialized)
+	{
+		referenceMagneticField_ = mag;
+		magnetic_initialized = true;
+		current_t = t;
+		return;
+	}
+
+	if(t < current_t) return;
+	//predict to current step
+	predict(this->gyro, this->acc, t);
+	
+	Vector3d z = mag;
+	Vector3d zhat;
+	MatrixXd H;
+	measurement_magnetic_field(zhat, H);
+	cout << "mag: " << mag.transpose() << " mag_hat: " << zhat.transpose() << endl;
+	correct(z, zhat, H, R_magnetic);
 }
