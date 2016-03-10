@@ -15,17 +15,6 @@ using namespace Eigen;
 //10-12 bwx bwy bwz
 //13-15 bax bay baz 
 
-Vector4d productMatrix(Quaterniond q)
-{
-	Vector4d p;
-	p(0) = q.w(); p.tail(3) = q.vec();
-	MatrixXd P(4, 4);
-	P << p(0), -p(1), -p(2), -p(3),
-		 p(1), p(0), -p(3), p(2),
-		 p(2), p(3), p(0), -p(1),
-		 p(3), -p(2), p(1), p(0);
- 	return P;
-}
 
 Matrix3d skew_symmetric(Vector3d v)
 {
@@ -72,6 +61,17 @@ MatrixXd diff_qvqstar_q(Quaterniond q, Vector3d v)
 	MatrixXd D(3, 4);
 	D.col(0) = 2*(q0*v + skew_symmetric(qv)*v);
 	D.block<3, 3>(0, 1) = 2*(-v*qv.transpose() + v.dot(qv)*Matrix3d::Identity() - q0*skew_symmetric(v));
+	return D; 
+}
+
+//diff_(qstar*v*q)/ diff_q
+MatrixXd diff_qstarvq_q(Quaterniond q, Vector3d v)
+{
+	double q0 = q.w();
+	Vector3d qv = q.vec();
+	MatrixXd D(3, 4);
+	D.col(0) = 2*(q0*v - skew_symmetric(qv)*v);
+	D.block<3, 3>(0, 1) = 2*(-v*qv.transpose() + v.dot(qv)*Matrix3d::Identity() + q0*skew_symmetric(v));
 	return D; 
 }
 //diff_(q*v*q_star)/ diff_v
@@ -259,12 +259,12 @@ void Pose_ekf::measurement_magnetic_field(Vector3d& magnetic_field, MatrixXd& H)
 	ref_mag_q.w() = 0; ref_mag_q.vec() = referenceMagneticField_;
 	cout << "ref_mag:" << referenceMagneticField_.transpose() << endl;
 	cout << "q: " << q.w()  << " " << q.vec().transpose() << endl;
-	Quaterniond magnetic_field_q =  q*ref_mag_q*q.inverse();
+	Quaterniond magnetic_field_q =  q.inverse()*ref_mag_q*q; //r_n to r_b
 	//cout << "magnetic_field_q: " << magnetic_field_q.w()  << " " << magnetic_field_q.vec().transpose() << endl;
 	magnetic_field = magnetic_field_q.vec();
 
 	H = MatrixXd::Zero(3, n_state);
-	H.block<3, 4>(0, 0) = diff_qvqstar_q(q, referenceMagneticField_);
+	H.block<3, 4>(0, 0) = diff_qstarvq_q(q, referenceMagneticField_);
 	cout << "magnetic_field: " << magnetic_field.transpose() << endl;
 }
 
