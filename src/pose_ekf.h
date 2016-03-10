@@ -6,12 +6,13 @@
 using namespace std;
 using namespace Eigen;
 
-//ekf state 
-//0-3 quaternion
-//4-6 Pn Pe Pd
-//7-9 Vn Ve Vd
-//10-12 bwx bwy bwz
-//13-15 bax bay baz 
+// state for kalman filter
+// 0-3 quaternion
+// 4-6 Px Py Pz
+// 7-9 Vx Vy Vz
+// 10-12 bwx bwy bwz
+// 13-15 bax bay baz 
+// inertial frame: ENU
 
 class Pose_ekf
 {
