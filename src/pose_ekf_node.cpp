@@ -97,7 +97,7 @@ bool processSensorData()
   
   if(imu_q.empty() || (imu_q.back().first - imu_q.front().first) < 0.15 ) return false;
 
-  //cout << "line" << __LINE__ << endl;
+  static int imu_cnt = 0;//correct with acc every 10 times
   //find the first com sensor
   double t[6] = {DBL_MAX};
   for(int i = 0; i < 6; i++) t[i] = DBL_MAX;
@@ -128,6 +128,8 @@ bool processSensorData()
         gyro(1) = msg.angular_velocity.y;
         gyro(2) = msg.angular_velocity.z;
         pose_ekf.predict(gyro, acc, t);
+        imu_cnt++;
+        if(imu_cnt % 10 == 0) pose_ekf.correct_gravity(acc, t);
         imu_q.pop_front();
         //cout << "line" << __LINE__ << endl;
     } else if(min_id == 1)//magnetic 

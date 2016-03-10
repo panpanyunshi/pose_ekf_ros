@@ -201,11 +201,11 @@ void Pose_ekf::process(Vector3d gyro, Vector3d acc, VectorXd& xdot, MatrixXd& F)
 	xdot.segment<3>(1) = q_dot.vec();
 	xdot.segment<3>(4) = v;
 	//cout << "line" << __LINE__ << endl;
-	Vector3d g = Vector3d(0, 0, 9.8);
+	//Vector3d g = Vector3d(0, 0, 9.8);
 	Quaterniond acc_b_q(0, 0, 0, 0);
 	acc_b_q.vec() = acc - ba;
 	Quaterniond acc_n_q =  q*acc_b_q*q.inverse();
-	xdot.segment<3>(7) = acc_n_q.vec() - g;//body frame to n frame 
+	xdot.segment<3>(7) = acc_n_q.vec() - GRAVITY;//body frame to n frame 
 	//cout << "line" << __LINE__ << endl;
 	F.block<4, 4>(0, 0) = 0.5*diff_pq_p(gyro_q);
 	F.block<4, 3>(0, 10) = -0.5*(diff_pq_q(q).block<4, 3>(0, 1));
@@ -266,6 +266,23 @@ void Pose_ekf::measurement_magnetic_field(Vector3d& magnetic_field, MatrixXd& H)
 	H = MatrixXd::Zero(3, n_state);
 	H.block<3, 4>(0, 0) = diff_qstarvq_q(q, referenceMagneticField_);
 	cout << "magnetic_field: " << magnetic_field.transpose() << endl;
+}
+
+void Pose_ekf::measurement_gravity(Vector3d& acc, MatrixXd& H)
+{
+	Quaterniond q;
+	q.w() = x(0); q.vec() = x.segment<3>(1);
+	Vector3d ba = x.segment<3>(13);
+	Quaterniond g_n_q;
+	g_n_q.w() = 0; g_n_q.vec() = Vector3d(0, 0, 1);//only direction is used
+	Quaterniond acc_q =  q.inverse()*g_n_q*q; //r_n to r_b
+	//cout << "magnetic_field_q: " << magnetic_field_q.w()  << " " << magnetic_field_q.vec().transpose() << endl;
+	acc = acc_q.vec();
+
+	H = MatrixXd::Zero(3, n_state);
+	H.block<3, 4>(0, 0) = diff_qstarvq_q(q, GRAVITY);
+	//H.block<3, 3>(0, 13) = Matrix3d::Identity();
+	cout << "acc: " << acc.transpose() << endl;
 }
 
 
@@ -358,7 +375,10 @@ void Pose_ekf::correct_magnetic_field(Vector3d mag, double t)
 {
 	if(!magnetic_initialized)
 	{
-		referenceMagneticField_ = mag;
+		//note, mag in ENU should be [0 1 x], but for the simulated data it is [1 0 x], maybe a bug
+		referenceMagneticField_(0) = mag.head(2).norm();
+		referenceMagneticField_(1) = 0;
+		referenceMagneticField_(2) = mag(2);
 		magnetic_initialized = true;
 		current_t = t;
 		return;
@@ -374,4 +394,24 @@ void Pose_ekf::correct_magnetic_field(Vector3d mag, double t)
 	measurement_magnetic_field(zhat, H);
 	cout << "mag: " << mag.transpose() << " mag_hat: " << zhat.transpose() << endl;
 	correct(z, zhat, H, R_magnetic);
+}
+
+void Pose_ekf::correct_gravity(Vector3d acc, double t)
+{
+	if(!initialized)
+	{
+		initialized = true;
+		this->current_t = t;
+		return;
+	}
+	if(t < current_t) return;
+	//predict to current step
+	predict(this->gyro, this->acc, t);
+	
+	Vector3d z = acc/acc.norm();
+	Vector3d zhat;
+	MatrixXd H;
+	measurement_gravity(zhat, H);
+	cout << "acc: " << z << " acc_hat: " << zhat.transpose() << endl;
+	correct(z, zhat, H, R_gravity);
 }

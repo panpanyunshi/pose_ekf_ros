@@ -30,13 +30,14 @@ public:
 	void measurement_fix_velocity(Vector3d& velocity, MatrixXd& H);
 	void measurement_sonar_height(VectorXd& sonar_height, MatrixXd& H);
 	void measurement_magnetic_field(Vector3d& magnetic_field, MatrixXd& H);
+	void measurement_gravity(Vector3d& acc, MatrixXd& H);
 
 	void correct(VectorXd z, VectorXd zhat, MatrixXd H, MatrixXd R);
 	void correct_fix(Vector3d position, double t);
 	void correct_fix_velocity(Vector3d velocity, double t);
 	void correct_sonar_height(double sonar_height, double t);//todo, without considering the roll and pitch
 	void correct_magnetic_field(Vector3d mag, double t);
-
+	void correct_gravity(Vector3d acc, double t);
 	// void measurement_altimeter(double& altimeter_height, MatrixXd H);
 	void getState(Quaterniond& q, Vector3d& position, Vector3d& velocity, Vector3d & bw, Vector3d&  ba);
 	double get_time() { return current_t;}
@@ -44,13 +45,15 @@ private:
 	VectorXd x;//state 
 	MatrixXd P;//covariance
 
+
+	const Vector3d GRAVITY = Vector3d(0, 0, 9.8);
 	//covariance parameter
-	const double fix_cov = 10000;//2.0;
+	const double fix_cov = 2.0;
 	const double sonar_height_cov = 0.2;
 	const double fix_velocity_cov = 2.0;
 	const double gyro_cov = 1e-2;
-	const double acc_cov = 1e-1;
-	const double mag_cov = 2.0;
+	const double gravity_cov = 5.0;
+	const double mag_cov = 5.0;
 
 	const int n_state = 16;
 	const MatrixXd Q = MatrixXd::Identity(n_state, n_state)*0.01; //process noise
@@ -58,6 +61,7 @@ private:
 	const MatrixXd R_fix_velocity = Matrix3d::Identity()*fix_velocity_cov;
 	const MatrixXd R_sonar_height = MatrixXd::Identity(1, 1)*sonar_height_cov;
 	const MatrixXd R_magnetic = Matrix3d::Identity()*mag_cov;
+	const MatrixXd R_gravity = Matrix3d::Identity()*gravity_cov;
 	Vector3d acc;
 	Vector3d gyro;
 
