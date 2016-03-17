@@ -14,6 +14,21 @@ Extented Kalman Filter for 6D pose estimation using gps, imu, magnetometer and s
 
 #inertial frame: ENU
 
+# How to run the code
+    cd catkin_ws/src
+    git clone git@github.com:libing64/pose_ekf.git
+    cd ..
+    catkin_make -DCATKIN_WHITELIST_PACKAGES="pose_ekf"
+    roslaunch pose_ekf pose_ekf.launch
+#rosbag for test
+1. download the rosbag
+
+    https://drive.google.com/folderview?id=0B4hFvojO5r3scWJRVWdhSmdLd0k&usp=sharing
+    
+2. replay the rosbag
+
+    rosbag play 2016-03-09-22-11-07.bag
+
 ![pose_ekf1](https://cloud.githubusercontent.com/assets/3192355/13659245/5f6d9e70-e6ba-11e5-8baa-edfb05460506.png)
 
 
