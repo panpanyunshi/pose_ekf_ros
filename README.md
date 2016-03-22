@@ -33,3 +33,7 @@ Extented Kalman Filter for 6D pose estimation using gps, imu, magnetometer and s
 
 
 ![pose_ekf2](https://cloud.githubusercontent.com/assets/3192355/13659246/5f6e8b1e-e6ba-11e5-8cb1-f212e1b0b8dc.png)
+
+# reference:
+
+http://web.cs.iastate.edu/~cs577/handouts/quaternion.pdf
