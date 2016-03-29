@@ -21,7 +21,7 @@ public:
 	~Pose_ekf();	
 	void predict(Vector3d gyro, Vector3d acc, double t);
 	void correct(Vector3d pos, Vector3d vel, Vector3d mag, double t);
-	void process(Vector3d gyro, Vector3d acc, VectorXd& xdot, MatrixXd& F);
+	void process(Vector3d gyro, Vector3d acc, VectorXd& xdot, MatrixXd& F, MatrixXd& G);
 	MatrixXd computeF(Vector3d gyro, Vector3d acc);
 	
 	VectorXd measurement(VectorXd x, Vector3d mag);
@@ -52,17 +52,18 @@ private:
 	const double fix_cov = 2.0;
 	const double sonar_height_cov = 0.2;
 	const double fix_velocity_cov = 2.0;
-	const double gyro_cov = 1e-2;
-	const double gravity_cov = 5.0;
+	const double gyro_cov = 0.1;
+	const double acc_cov = 5.0;
 	const double mag_cov = 5.0;
 
 	const int n_state = 16;
-	const MatrixXd Q = MatrixXd::Identity(n_state, n_state)*0.01; //process noise
+	MatrixXd Q;//imu observation noise
 	const MatrixXd R_fix = Matrix2d::Identity()*fix_cov;
 	const MatrixXd R_fix_velocity = Matrix3d::Identity()*fix_velocity_cov;
 	const MatrixXd R_sonar_height = MatrixXd::Identity(1, 1)*sonar_height_cov;
 	const MatrixXd R_magnetic = Matrix3d::Identity()*mag_cov;
-	const MatrixXd R_gravity = Matrix3d::Identity()*gravity_cov;
+	const MatrixXd R_acc = Matrix3d::Identity()*acc_cov;
+	const MatrixXd R_gyro = Matrix3d::Identity()*gyro_cov;
 	Vector3d acc;
 	Vector3d gyro;
 

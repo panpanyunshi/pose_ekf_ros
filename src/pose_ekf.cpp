@@ -91,6 +91,11 @@ Pose_ekf::Pose_ekf()
 	x.head(4) << 1, 0, 0, 0;
 	P = MatrixXd::Identity(n_state, n_state);
 
+	Q = MatrixXd::Zero(6, 6);
+	Q.block<3, 3>(0, 0) = Matrix3d::Identity()*gyro_cov;
+	Q.block<3, 3>(3, 3) = Matrix3d::Identity()*acc_cov;
+
+
 	initialized = false;
 	fix_initialized = false;
 	imu_initialized = false;
@@ -123,11 +128,15 @@ void Pose_ekf::predict(Vector3d gyro, Vector3d acc, double t)
 	double dt = t - current_t;
 	VectorXd xdot(n_state);
 	MatrixXd F(n_state, n_state);
-	process(gyro, acc, xdot, F);
+	MatrixXd G(n_state, 6);//G = dx/du
+
+	process(gyro, acc, xdot, F, G);
 	
 	x += xdot*dt;
 	F = MatrixXd::Identity(n_state, n_state) + F*dt;//continous F and discrete F
-	P = F*P*F.transpose() + Q;//Q and t
+	G = G*dt;
+	
+	P = F*P*F.transpose() + G*Q*G.transpose();
 	x.head(4).normalize();
 	
 	this->current_t = t;
@@ -136,7 +145,7 @@ void Pose_ekf::predict(Vector3d gyro, Vector3d acc, double t)
 }
 
 //xdot = f(x, u);
-void Pose_ekf::process(Vector3d gyro, Vector3d acc, VectorXd& xdot, MatrixXd& F)
+void Pose_ekf::process(Vector3d gyro, Vector3d acc, VectorXd& xdot, MatrixXd& F, MatrixXd& G)
 {
 	
 	Quaterniond q;
@@ -145,6 +154,7 @@ void Pose_ekf::process(Vector3d gyro, Vector3d acc, VectorXd& xdot, MatrixXd& F)
 	
 	xdot.setZero();
 	F.setZero();
+	G.setZero();
 	
 	Quaterniond gyro_q(0, 0, 0, 0);
 	gyro_q.vec() = gyro - bw;
@@ -164,7 +174,10 @@ void Pose_ekf::process(Vector3d gyro, Vector3d acc, VectorXd& xdot, MatrixXd& F)
 	F.block<3, 3>(4, 7) = Matrix3d::Identity();
 	F.block<3, 4>(7, 0) = diff_qvqstar_q(q, acc_b_q.vec());
 	F.block<3, 3>(7, 13) = -diff_qvqstar_v(q);
-	
+
+	//G = d_xdot/du
+	G.block<4, 3>(0, 0) = 0.5*diff_pq_q(q).block<4, 3>(0, 1);//diff(0.5*q*gyro_q)/diff(gyro_q)
+	G.block<3, 3>(7, 3) = diff_qvqstar_v(q);//diff(q*a*qstar)/diff(a)
 }
 
 void Pose_ekf::getState(Quaterniond& q, Vector3d& p, Vector3d& v, Vector3d & bw, Vector3d& ba)
@@ -301,7 +314,7 @@ void Pose_ekf::correct_magnetic_field(Vector3d mag, double t)
 	if(!magnetic_initialized)
 	{
 		//note, mag in ENU should be [0 1 x], but for the simulated data it is [1 0 x], maybe a bug
-		referenceMagneticField_(0) = mag.head(2).norm();
+		referenceMagneticField_(0) = mag.head(2).norm();//todo
 		referenceMagneticField_(1) = 0;
 		referenceMagneticField_(2) = mag(2);
 		magnetic_initialized = true;
@@ -333,5 +346,5 @@ void Pose_ekf::correct_gravity(Vector3d acc, double t)
 	Vector3d zhat;
 	MatrixXd H;
 	measurement_gravity(zhat, H);
-	correct(z, zhat, H, R_gravity);
+	correct(z, zhat, H, R_acc);
 }
