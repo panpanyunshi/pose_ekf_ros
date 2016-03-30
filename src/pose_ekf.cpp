@@ -135,7 +135,9 @@ void Pose_ekf::predict(Vector3d gyro, Vector3d acc, double t)
 	x += xdot*dt;
 	F = MatrixXd::Identity(n_state, n_state) + F*dt;//continous F and discrete F
 	G = G*dt;
-	
+	// cout << "G: " << G << endl;
+	// cout << "GQG: " << G*Q*G << endl;
+
 	P = F*P*F.transpose() + G*Q*G.transpose();
 	x.head(4).normalize();
 	
@@ -160,8 +162,7 @@ void Pose_ekf::process(Vector3d gyro, Vector3d acc, VectorXd& xdot, MatrixXd& F,
 	gyro_q.vec() = gyro - bw;
 	Quaterniond q_dot = q*gyro_q;
 	q_dot.w() /= 2; q_dot.vec() /= 2;//* and / to scalar is not support for Quaternion
-	xdot(0) = q_dot.w();
-	xdot.segment<3>(1) = q_dot.vec();
+	xdot(0) = q_dot.w(); xdot.segment<3>(1) = q_dot.vec();
 	xdot.segment<3>(4) = v;
 
 	Quaterniond acc_b_q(0, 0, 0, 0);
@@ -346,5 +347,5 @@ void Pose_ekf::correct_gravity(Vector3d acc, double t)
 	Vector3d zhat;
 	MatrixXd H;
 	measurement_gravity(zhat, H);
-	correct(z, zhat, H, R_acc);
+	correct(z, zhat, H, R_gravity);
 }
