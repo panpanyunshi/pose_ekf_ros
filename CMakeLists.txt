@@ -8,7 +8,10 @@ set(CMAKE_CXX_FLAGS "-DNDEBUG -std=c++11 -march=native -Ofast -Wall -fopenmp")
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
 find_package(Eigen3 REQUIRED)
-find_package(GeographicLib 1.35 REQUIRED)
+# https://stackoverflow.com/questions/48169653/finding-geographiclib-in-cmake-on-debian
+# set(GeographicLib_DIR "/usr/share/cmake/geographiclib/")
+list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/Modules/")
+find_package(GeographicLib REQUIRED) 
 
 find_package(catkin REQUIRED
   message_generation
@@ -20,13 +23,14 @@ find_package(catkin REQUIRED
   roslib
 )
 include_directories(
+  ${catkin_INCLUDE_DIRS}
 ${EIGEN3_INCLUDE_DIR}
 ${GeographicLib_INCLUDE_DIRS}
 ) 
 
 add_definitions(${GeographicLib_DEFINITIONS})
 ## System dependencies are found with CMake's conventions
-# find_package(Boost REQUIRED COMPONENTS system)
+# find_pacGeographicLib_INCLUDE_DIRSkage(Boost REQUIRED COMPONENTS system)
 
 
 ## Uncomment this if the package has a setup.py. This macro ensures

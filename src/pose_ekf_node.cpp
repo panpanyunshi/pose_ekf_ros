@@ -13,7 +13,7 @@
 
 #include <geometry_msgs/Vector3Stamped.h>
 #include <geometry_msgs/PoseStamped.h>
-#include "hector_uav_msgs/Altimeter.h"
+// #include "hector_uav_msgs/Altimeter.h"
 
 
 #include <Eigen/Geometry>
@@ -50,7 +50,7 @@ ros::Publisher pub_path;
 
 deque< pair<double, sensor_msgs::Imu> > imu_q;
 deque< pair<double, geometry_msgs::Vector3Stamped> > mag_q;
-deque< pair<double, hector_uav_msgs::Altimeter> >altimeter_q;
+// deque< pair<double, hector_uav_msgs::Altimeter> >altimeter_q;
 deque< pair<double, sensor_msgs::Range> >sonar_height_q;
 deque< pair<double, Vector3d> >fix_q;
 deque< pair<double, geometry_msgs::Vector3Stamped> >fix_velocity_q;
@@ -103,7 +103,8 @@ bool processSensorData()
   for(int i = 0; i < 6; i++) t[i] = DBL_MAX;
   if(!imu_q.empty()) t[0] = imu_q.front().first;
   if(!mag_q.empty()) t[1] = mag_q.front().first;
-  if(!altimeter_q.empty()) t[2] = altimeter_q.front().first;
+  // if(!altimeter_q.empty()) t[2] = altimeter_q.front().first;
+
   if(!sonar_height_q.empty()) t[3] = sonar_height_q.front().first;
   if(!fix_q.empty()) t[4] = fix_q.front().first;
   if(!fix_velocity_q.empty()) t[5] = fix_velocity_q.front().first;
@@ -192,12 +193,12 @@ void magCallback(const geometry_msgs::Vector3StampedConstPtr &msg)
   mag_q.push_back(make_pair(t, *msg));
 }
 
-void altimeterCallback(const hector_uav_msgs::AltimeterConstPtr& msg)
-{
-  double t = msg->header.stamp.toSec();
-  //altimeter_q.push_back(make_pair(t, *msg));
-  //cout << "altimeter; ";
-}
+// void altimeterCallback(const hector_uav_msgs::AltimeterConstPtr& msg)
+// {
+//   double t = msg->header.stamp.toSec();
+//   //altimeter_q.push_back(make_pair(t, *msg));
+//   //cout << "altimeter; ";
+// }
 
 void sonarCallback(const sensor_msgs::RangeConstPtr &msg)
 {
@@ -255,7 +256,7 @@ int main (int argc, char **argv)
   ros::Subscriber sub_fix = n.subscribe("fix", 100, fixCallback);
   ros::Subscriber sub_sonar = n.subscribe("sonar_height", 100, sonarCallback); 
   ros::Subscriber sub_fix_velocity = n.subscribe("fix_velocity", 100, fixVelocityCallback);
-  ros::Subscriber sub_altimeter = n.subscribe("altimeter", 100, altimeterCallback);
+  // ros::Subscriber sub_altimeter = n.subscribe("altimeter", 100, altimeterCallback);
   
 
   bool ret = loadModels();
